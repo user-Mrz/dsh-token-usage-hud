@@ -111,7 +111,8 @@ const sandbox = {
 			period: "peak",
 			totals: { input: 1000, cacheRead: 2000, cacheWrite: 0, output: 500, total: 3500 },
 			models: [{ model: "deepseek-v4-flash", input: 1000, cacheRead: 2000, cacheWrite: 0, output: 500, steps: 5, cost: 0.5 }],
-			context: { usedTokens: 964000, contextWindow: 1000000, period: "peak", model: "deepseek-v4-flash", currency: "CNY", cost: 2.892 }
+			context: { usedTokens: 964000, contextWindow: 1000000, period: "peak", model: "deepseek-v4-flash", currency: "CNY", cost: 2.892 },
+			balance: { isAvailable: true, currency: "CNY", total: 110, granted: 10, toppedUp: 100, fetchedAt: 123 }
 		})
 	}),
 	__ModuleLoader__: loader
@@ -156,6 +157,8 @@ console.log("body html:", JSON.stringify(bodyEl.innerHTML));
 if (!bodyEl.innerHTML.includes("上下文 ~964k / 1M (96%)")) throw new Error("context occupancy line missing");
 if (!bodyEl.innerHTML.includes("≈¥2.89")) throw new Error("context cost missing");
 if (!bodyEl.innerHTML.includes("[deepseek-v4-flash · 高峰]")) throw new Error("period tag missing");
+if (!bodyEl.innerHTML.includes("余额") || !bodyEl.innerHTML.includes("¥110")) throw new Error("balance line missing");
+if (!bodyEl.innerHTML.includes("充值 ¥100 · 赠送 ¥10")) throw new Error("balance breakdown title missing");
 
 // 1. initial position from config (no saved pos)
 if (box.attributes.get("data-position") !== "top-right") throw new Error("config position not applied");

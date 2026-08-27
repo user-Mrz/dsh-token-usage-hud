@@ -1,7 +1,7 @@
 {
   "name": "dsh-token-usage-hud",
   "description": "DSH Web 插件：在界面顶层悬浮显示当前对话的 token 消耗与费用消耗（本对话用量 HUD）。",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

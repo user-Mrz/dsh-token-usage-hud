@@ -1,6 +1,15 @@
 # dsh-token-usage-hud
 
+DSH Web 插件：在界面**顶层**（悬浮、置顶）显示当前对话的 token 消耗、费用消耗与
+账户剩余金额。
 
+```
+⚡ 本对话用量          ×
+输入 217k · 缓存 57.1M · 输出 161k
+总 tokens 57.4M · 275 步
+费用 ¥7.81  [deepseek-v4-flash · 高峰]
+上下文 ~964k / 1M (96%) · ≈¥2.89
+余额 ¥110.00
 ```
 
 ## 功能
@@ -8,6 +17,10 @@
 - **host 端**：订阅 `session/event`，对持久会话日志做增量折叠（provider 上报的
   `assistant/message` usage，按 `request/header` 记录的模型归账），并暴露
   loopback-only 的 JSON 接口 `/api/token-usage/stats?session=<id>`。
+- **账户余额**：通过 credentials 服务解析 DeepSeek API Key（默认
+  `DEEPSEEK_API_KEY`，与 llm 适配器同源），调用官方 `GET /user/balance` 实时
+  显示剩余金额（充值/赠送明细悬停可见），带内存缓存与并发合并，Key 只在
+  host 端使用、绝不进入浏览器。
 - **上下文占用行**：读取与对话框（composer）下方同一数据源的
   `contextPressure` 投影（`~已用 / 上下文窗口` 及占用百分比），并按当前模型的
   输入单价 × 当前时段给出**下一次请求的上下文费用估算**（`≈¥X`）。
@@ -87,6 +100,11 @@ dsh plugin --profile web remove dsh-token-usage-hud
     pollMs: 1500           # 客户端轮询间隔(ms)，>=300
     position: top-right    # top-right | top-center | bottom-right
     visible: true          # 初始是否显示悬浮框
+    balance:
+      enabled: true        # 账户余额显示开关
+      refreshMs: 30000     # 余额缓存/刷新间隔(ms)，>=5000
+      apiKeyEnv: DEEPSEEK_API_KEY   # credentials 凭据引用（默认即此值）
+      baseURL: https://api.deepseek.com
     prices:
       # 双档：高峰/空闲分别计价（官方 V4 价格，见下节）
       deepseek-v4-flash:
@@ -98,6 +116,11 @@ dsh plugin --profile web remove dsh-token-usage-hud
 
 `prices` 的单位为「每百万 tokens」；key 为模型 id，`default` 兜底未知模型。
 每步消耗按**该步完成时的北京时间**判定高峰/空闲并计价（不是按查询时刻）。
+
+余额通过 DSH 的 credentials 服务解析（env 继承 → `~/.dsh/.credentials.yaml`，
+与 web「模型」页写入口一致），**Key 只在 host 端用于调用 DeepSeek
+`GET /user/balance`，绝不随 HTTP 响应下发到浏览器**；接口本身仅回传余额数字。
+若未配置 Key，悬浮框显示「余额 获取失败」。
 
 ## 官方定价（DeepSeek V4，¥/百万 tokens）
 

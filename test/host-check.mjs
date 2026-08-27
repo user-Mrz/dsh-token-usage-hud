@@ -87,6 +87,11 @@ const fakeCtx = {
 				}
 			};
 		}
+		if (name === "credentials") {
+			return {
+				resolve: async (ref) => (ref === "DEEPSEEK_API_KEY" ? { value: "sk-test-balance" } : undefined)
+			};
+		}
 		return undefined;
 	},
 	webServer: {
@@ -104,12 +109,36 @@ const fakeCtx = {
 	}
 };
 
+// --- balance fetch stub (DeepSeek GET /user/balance) ----------------------
+let balanceFetches = 0;
+let lastAuthHeader = null;
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, init) => {
+	balanceFetches += 1;
+	lastAuthHeader = init?.headers?.authorization ?? null;
+	const u = String(url);
+	if (u.endsWith("/user/balance")) {
+		return {
+			ok: true,
+			status: 200,
+			json: async () => ({
+				is_available: true,
+				balance_infos: [
+					{ currency: "CNY", total_balance: "110.00", granted_balance: "10.00", topped_up_balance: "100.00" }
+				]
+			})
+		};
+	}
+	throw new Error("unexpected fetch: " + u);
+};
+
 const config = {
 	enabled: true,
 	currency: "CNY",
 	position: "top-right",
 	pollMs: 1500,
 	visible: true,
+	balance: { enabled: true, refreshMs: 60000, apiKeyEnv: "DEEPSEEK_API_KEY", baseURL: "https://api.deepseek.com" },
 	prices: {
 		default: {
 			peak: { input: 3.0, cacheRead: 0.1, cacheWrite: 3.0, output: 9.0 },
@@ -166,6 +195,22 @@ const period = body.context.period;
 const expectedCost = Math.round(964000 / 1e6 * (period === "peak" ? 3.0 : 1.5) * 1e6) / 1e6;
 if (Math.abs(body.context.cost - expectedCost) > 1e-6) throw new Error(`context cost mismatch: ${body.context.cost} vs ${expectedCost}`);
 
+// balance block: DeepSeek /user/balance via the credentials service
+console.log("balance:", JSON.stringify(body.balance));
+if (body.balance === null || typeof body.balance !== "object") throw new Error("balance missing");
+if (body.balance.error !== undefined) throw new Error("balance error: " + body.balance.error);
+if (body.balance.total !== 110) throw new Error("balance total wrong: " + body.balance.total);
+if (body.balance.currency !== "CNY") throw new Error("balance currency wrong");
+if (body.balance.isAvailable !== true) throw new Error("is_available wrong");
+if (body.balance.toppedUp !== 100 || body.balance.granted !== 10) throw new Error("balance breakdown wrong");
+if (lastAuthHeader !== "Bearer sk-test-balance") throw new Error("auth header wrong");
+console.log("balance fetches after first request:", balanceFetches);
+if (balanceFetches !== 1) throw new Error("expected exactly one balance fetch");
+
+// balance cache: second request within refreshMs must NOT refetch
+await route.handler(req, res);
+if (balanceFetches !== 1) throw new Error("balance cache failed: refetched within refreshMs");
+
 // unknown session
 await route.handler({ method: "GET", url: "/api/token-usage/stats?session=nope", socket: { remoteAddress: "127.0.0.1" }, headers: { host: "127.0.0.1:3080" } }, res);
 if (body.exists !== false) throw new Error("unknown session should report exists:false");
@@ -176,4 +221,5 @@ if (status !== 403) throw new Error("non-loopback should be 403");
 
 // unload cleanly
 for (const d of unload) d();
+globalThis.fetch = realFetch;
 console.log("HOST APPLY OK");

@@ -20,6 +20,14 @@
 # Peak hours (Beijing time): Mon-Fri 09:00-12:00 and 14:00-18:00; off-peak is
 # exactly half the peak price. Official source:
 # https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
+#
+#   balance     - account balance display (DeepSeek GET /user/balance):
+#     enabled   - host half off switch. Default true.
+#     refreshMs - cache/refresh interval in ms, >= 5000. Default 30000.
+#     apiKeyEnv - credential ref resolved through the credentials service
+#                 (env-inherited managed store); never leaves the host.
+#                 Default DEEPSEEK_API_KEY.
+#     baseURL   - DeepSeek API origin. Default https://api.deepseek.com
 
 - insert:
     - id: dsh-token-usage-hud
@@ -30,6 +38,11 @@
         pollMs: 1500
         position: top-right
         visible: true
+        balance:
+          enabled: true
+          refreshMs: 30000
+          apiKeyEnv: DEEPSEEK_API_KEY
+          baseURL: https://api.deepseek.com
         prices:
           default:
             peak:
