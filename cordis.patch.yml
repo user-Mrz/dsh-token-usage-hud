@@ -1,0 +1,88 @@
+# dsh-token-usage-hud bundle patch.
+#
+# Inserts the plugin row into the profile loader. The row id must stay unique
+# across every bundle layer; the name must be the package name (the loader and
+# the client-module scanner resolve the package by this name).
+#
+# Config keys:
+#   enabled     - host half off switch (route + event fold). Default true.
+#   currency    - "CNY" (default) or "USD"; only affects how cost is labeled.
+#   pollMs      - client overlay refresh interval in ms. Default 1500.
+#   position    - "top-right" (default) | "top-center" | "bottom-right".
+#   visible     - client overlay initially visible. Default true.
+#   prices      - per-model cost table, per 1M tokens. Each entry is either
+#                 the flat form {input, cacheRead, cacheWrite, output} (both
+#                 billing periods priced equally) or the DeepSeek V4 form
+#                 {peak: {...}, offpeak: {...}} (a missing period mirrors the
+#                 other). "default" covers unknown models. cacheWrite falls
+#                 back to cacheRead when omitted.
+#
+# Peak hours (Beijing time): Mon-Fri 09:00-12:00 and 14:00-18:00; off-peak is
+# exactly half the peak price. Official source:
+# https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
+
+- insert:
+    - id: dsh-token-usage-hud
+      name: 'dsh-token-usage-hud'
+      config:
+        enabled: true
+        currency: CNY
+        pollMs: 1500
+        position: top-right
+        visible: true
+        prices:
+          default:
+            peak:
+              input: 3.0
+              cacheRead: 0.10
+              cacheWrite: 3.0
+              output: 9.0
+            offpeak:
+              input: 1.5
+              cacheRead: 0.05
+              cacheWrite: 1.5
+              output: 4.5
+          deepseek-v4-flash:
+            peak:
+              input: 3.0
+              cacheRead: 0.10
+              cacheWrite: 3.0
+              output: 9.0
+            offpeak:
+              input: 1.5
+              cacheRead: 0.05
+              cacheWrite: 1.5
+              output: 4.5
+          deepseek-v4-pro:
+            peak:
+              input: 9.0
+              cacheRead: 0.30
+              cacheWrite: 9.0
+              output: 27.0
+            offpeak:
+              input: 4.5
+              cacheRead: 0.15
+              cacheWrite: 4.5
+              output: 13.5
+          deepseek-v4-flash-vision-exp:
+            peak:
+              input: 3.0
+              cacheRead: 0.10
+              cacheWrite: 3.0
+              output: 9.0
+            offpeak:
+              input: 1.5
+              cacheRead: 0.05
+              cacheWrite: 1.5
+              output: 4.5
+          # 旧一代模型（兼容保留；单档即两时段同价）
+          deepseek-chat:
+            input: 2
+            cacheRead: 0.5
+            cacheWrite: 2
+            output: 8
+          deepseek-reasoner:
+            input: 4
+            cacheRead: 1
+            cacheWrite: 4
+            output: 16
