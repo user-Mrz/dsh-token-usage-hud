@@ -102,7 +102,8 @@ dsh plugin --profile web remove dsh-token-usage-hud
     visible: true          # 初始是否显示悬浮框
     balance:
       enabled: true        # 账户余额显示开关
-      refreshMs: 30000     # 余额缓存/刷新间隔(ms)，>=5000
+      refreshMs: 15000     # 空闲时余额刷新间隔(ms)，>=5000
+      refetchFloorMs: 5000 # 对话消耗期间余额重拉的最小间隔(ms)，>=1000
       apiKeyEnv: DEEPSEEK_API_KEY   # credentials 凭据引用（默认即此值）
       baseURL: https://api.deepseek.com
     prices:
@@ -121,6 +122,11 @@ dsh plugin --profile web remove dsh-token-usage-hud
 与 web「模型」页写入口一致），**Key 只在 host 端用于调用 DeepSeek
 `GET /user/balance`，绝不随 HTTP 响应下发到浏览器**；接口本身仅回传余额数字。
 若未配置 Key，悬浮框显示「余额 获取失败」。
+
+**余额同步机制**：空闲时按 `refreshMs` 刷新；对话进行中每当有新的计费用量
+（`assistant/message` 带 usage）落地，缓存即失效，下一次轮询（1.5s 内）重新
+拉取余额，受 `refetchFloorMs`（默认 5s）防抖下限约束——消耗期间余额约每 5s
+同步一次。注意 DeepSeek 余额接口本身对已完成的请求扣款可能有少量延迟。
 
 ## 官方定价（DeepSeek V4，¥/百万 tokens）
 

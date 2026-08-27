@@ -66,6 +66,7 @@ sessions.set(sessionId, fakeSession);
 
 let route = null;
 const unload = [];
+const handlers = new Map();
 const fakeCtx = {
 	sessions: {
 		list: () => [...sessions.values()],
@@ -100,7 +101,10 @@ const fakeCtx = {
 			return () => { route = null; };
 		}
 	},
-	on: () => () => {},
+	on(name, fn) {
+		handlers.set(name, fn);
+		return () => handlers.delete(name);
+	},
 	logger: { info: () => {}, warn: (...a) => console.warn(...a) },
 	effect(fn) {
 		const disposer = fn();
@@ -138,7 +142,7 @@ const config = {
 	position: "top-right",
 	pollMs: 1500,
 	visible: true,
-	balance: { enabled: true, refreshMs: 60000, apiKeyEnv: "DEEPSEEK_API_KEY", baseURL: "https://api.deepseek.com" },
+	balance: { enabled: true, refreshMs: 60000, refetchFloorMs: 1000, apiKeyEnv: "DEEPSEEK_API_KEY", baseURL: "https://api.deepseek.com" },
 	prices: {
 		default: {
 			peak: { input: 3.0, cacheRead: 0.1, cacheWrite: 3.0, output: 9.0 },
@@ -210,6 +214,19 @@ if (balanceFetches !== 1) throw new Error("expected exactly one balance fetch");
 // balance cache: second request within refreshMs must NOT refetch
 await route.handler(req, res);
 if (balanceFetches !== 1) throw new Error("balance cache failed: refetched within refreshMs");
+
+// activity invalidation: a usage-bearing assistant/message must invalidate the
+// cache; the next poll within refetchFloorMs still serves cache, and after the
+// floor elapses it refetches (real-time sync while the conversation consumes).
+const eventHandler = handlers.get("session/event");
+if (typeof eventHandler !== "function") throw new Error("session/event handler not registered");
+eventHandler(fakeSession, { type: "assistant/message", data: { usage: { inputTokens: 100, outputTokens: 50 } } });
+await route.handler(req, res);
+if (balanceFetches !== 1) throw new Error("refetch fired before refetchFloorMs");
+await new Promise((resolve) => setTimeout(resolve, 1100));
+await route.handler(req, res);
+console.log("balance fetches after usage-invalidation refetch:", balanceFetches);
+if (balanceFetches !== 2) throw new Error("usage invalidation did not trigger refetch after floor");
 
 // unknown session
 await route.handler({ method: "GET", url: "/api/token-usage/stats?session=nope", socket: { remoteAddress: "127.0.0.1" }, headers: { host: "127.0.0.1:3080" } }, res);

@@ -23,7 +23,11 @@
 #
 #   balance     - account balance display (DeepSeek GET /user/balance):
 #     enabled   - host half off switch. Default true.
-#     refreshMs - cache/refresh interval in ms, >= 5000. Default 30000.
+#     refreshMs - idle cache/refresh interval in ms, >= 5000. Default 15000.
+#     refetchFloorMs - minimum interval between balance requests while the
+#                 conversation is actively consuming (usage events invalidate
+#                 the cache so the next poll refetches). >= 1000, capped at
+#                 refreshMs. Default 5000.
 #     apiKeyEnv - credential ref resolved through the credentials service
 #                 (env-inherited managed store); never leaves the host.
 #                 Default DEEPSEEK_API_KEY.
@@ -40,7 +44,8 @@
         visible: true
         balance:
           enabled: true
-          refreshMs: 30000
+          refreshMs: 15000
+          refetchFloorMs: 5000
           apiKeyEnv: DEEPSEEK_API_KEY
           baseURL: https://api.deepseek.com
         prices:
