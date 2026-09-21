@@ -3,7 +3,7 @@
 // pricing. Not shipped.
 import { readFileSync } from "node:fs";
 import { zstdDecompressSync } from "node:zlib";
-import { createFold, syncFold, finalizeFold, estimateSessionTokens, isPeakHour } from "../lib/index.js";
+import { createFold, syncFold, finalizeFold, estimateSessionTokens, isPeakHour, beijingDateKey } from "../lib/index.js";
 
 const ZSTD_MAGIC = 4247762216;
 function scanZstdFrames(buffer) {
@@ -60,6 +60,20 @@ const cases = [
 for (const [iso, expected, label] of cases) {
 	const got = isPeakHour(new Date(iso));
 	if (got !== expected) throw new Error(`isPeakHour ${label}: expected ${expected}, got ${got}`);
+	console.log(`isPeakHour ok: ${label}`);
+}
+
+// 法定节假日：工作日全天按空闲价（offpeakDates 为北京时间日期键）
+if (beijingDateKey(new Date("2026-03-09T02:00:00Z")) !== "2026-03-09") throw new Error("beijingDateKey wrong");
+console.log("beijingDateKey ok: 2026-03-09T02:00:00Z -> 2026-03-09");
+const holidayCases = [
+	["2026-03-09T02:00:00Z", true, [], "Mon 10:00 CST on a workday -> peak"],
+	["2026-03-09T02:00:00Z", false, ["2026-03-09"], "Mon 10:00 CST on a statutory holiday -> off-peak"],
+	["2026-03-09T07:00:00Z", false, ["2026-03-09"], "Mon 15:00 CST on a statutory holiday -> off-peak"]
+];
+for (const [iso, expected, list, label] of holidayCases) {
+	const got = isPeakHour(new Date(iso), list);
+	if (got !== expected) throw new Error(`isPeakHour(holiday) ${label}: expected ${expected}, got ${got}`);
 	console.log(`isPeakHour ok: ${label}`);
 }
 

@@ -5,10 +5,10 @@ DSH Web 插件：在界面**顶层**（悬浮、置顶）显示当前对话的 t
 
 ```
 ⚡ 本对话用量          ×
-输入 217k · 缓存 57.1M · 输出 161k
-总 tokens 57.4M · 275 步
-费用 ¥7.81  [deepseek-v4-flash · 高峰]
-上下文 ~964k / 1M (96%) · ≈¥2.89
+输入 1.04M · 缓存 83.8M · 输出 205k
+总 tokens 85.1M · 349 步
+费用 ¥7.14  [deepseek-flash · 高峰]
+上下文 ~964k / 1M (96%) · ≈¥1.93
 余额 ¥110.00
 ```
 
@@ -100,6 +100,7 @@ dsh plugin --profile web remove dsh-token-usage-hud
     pollMs: 1500           # 客户端轮询间隔(ms)，>=300
     position: top-right    # top-right | top-center | bottom-right
     visible: true          # 初始是否显示悬浮框
+    offpeakDates: []       # 中国法定节假日（北京时间 YYYY-MM-DD）全天按空闲价
     balance:
       enabled: true        # 账户余额显示开关
       refreshMs: 15000     # 空闲时余额刷新间隔(ms)，>=5000
@@ -128,21 +129,24 @@ dsh plugin --profile web remove dsh-token-usage-hud
 拉取余额，受 `refetchFloorMs`（默认 5s）防抖下限约束——消耗期间余额约每 5s
 同步一次。注意 DeepSeek 余额接口本身对已完成的请求扣款可能有少量延迟。
 
-## 官方定价（DeepSeek V4，¥/百万 tokens）
+## 官方定价（¥/百万 tokens）
 
 来源：[DeepSeek API 文档 · 模型 & 价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)
-（空闲时段价格为高峰时段价格的一半；高峰时段为北京时间周一至周五
-09:00–12:00、14:00–18:00，其余为空闲时段。）
 
 | 模型 | 输入·缓存未命中 空闲/高峰 | 输入·缓存命中 空闲/高峰 | 输出 空闲/高峰 |
 | --- | --- | --- | --- |
-| deepseek-v4-flash | 1.5 / 3.0 | 0.05 / 0.10 | 4.5 / 9.0 |
+| deepseek-flash | 1 / 2 | 0.02 / 0.04 | 4 / 8 |
 | deepseek-v4-pro | 4.5 / 9.0 | 0.15 / 0.30 | 13.5 / 27.0 |
-| deepseek-v4-flash-vision-exp | 1.5 / 3.0 | 0.05 / 0.10 | 4.5 / 9.0 |
 
-DeepSeek 无独立「缓存写入」计费项，故 `cacheWrite` 默认按「输入·缓存未命中」
-价计（V4 场景下 provider 不上报该桶，实际不影响结果）。悬浮框费用行会标注
-当前时段：`[deepseek-v4-flash · 高峰]` 或 `[空闲]`。
+- **模型名**：官方现役名为 `deepseek-flash`（版本 DeepSeek-V4.1-Flash，已支持图像理解）；
+  旧名 `deepseek-v4-flash`、`deepseek-v4-flash-vision-exp` 仍可调用，由 V4.1-Flash
+  提供服务并**同样按 Flash 价格计费**——本插件为这三个 id 配置了相同价格。
+- **时段**：空闲价为高峰价的一半。高峰时段为北京时间**周一至周五（不含中国法定
+  节假日）** 09:00–12:00、14:00–18:00；周末与法定节假日全天为空闲时段。
+  法定节假日通过 `offpeakDates` 配置（见上节，默认空 = 仅按周末规则）。
+- DeepSeek 无独立「缓存写入」计费项，故 `cacheWrite` 默认按「输入·缓存未命中」
+  价计（V4 场景下 provider 不上报该桶，实际不影响结果）。悬浮框费用行会标注
+  当前时段：`[deepseek-v4-flash · 高峰]` 或 `[空闲]`。
 
 ## 说明与限制
 

@@ -193,8 +193,13 @@ if (body.context === null || typeof body.context !== "object") throw new Error("
 console.log("context:", JSON.stringify(body.context));
 if (body.context.usedTokens !== 964000) throw new Error("usedTokens wrong");
 if (body.context.contextWindow !== 1000000) throw new Error("contextWindow wrong");
-if (body.context.model !== "deepseek-v4-flash") throw new Error("context model wrong");
-// expected: 964000 / 1e6 * input price of current period (peak=3.0, offpeak=1.5)
+// 模型名从会话日志最新的 request/header 推导（官方可能改名，如
+// deepseek-v4-flash -> deepseek-flash，测试不写死）。
+const lastHeader = [...events].reverse().find((e) => e.type === "request/header");
+const expectedModel = lastHeader?.data?.header?.config?.model;
+console.log("expected model from log:", expectedModel);
+if (body.context.model !== expectedModel) throw new Error(`context model wrong: ${body.context.model} vs ${expectedModel}`);
+// 时段单价取自测试配置的 dual 表：peak input=3.0, offpeak input=1.5
 const period = body.context.period;
 const expectedCost = Math.round(964000 / 1e6 * (period === "peak" ? 3.0 : 1.5) * 1e6) / 1e6;
 if (Math.abs(body.context.cost - expectedCost) > 1e-6) throw new Error(`context cost mismatch: ${body.context.cost} vs ${expectedCost}`);
