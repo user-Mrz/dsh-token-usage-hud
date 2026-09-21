@@ -14,6 +14,12 @@ const localStorageStub = {
 	removeItem: (k) => storage.delete(k)
 };
 
+// 桌面端模式：页面以自定义协议加载（origin = "app://dsh"），同源路径不可用，
+// 只有回退的 host 地址（http://127.0.0.1:3080）能应答。
+const DESKTOP_MODE = process.argv.includes("--desktop");
+const fetchedUrls = [];
+const desktopFailures = [];
+
 function makeElement(tag) {
 	const el = {
 		tagName: tag.toUpperCase(),
@@ -100,21 +106,31 @@ const sandbox = {
 	Object,
 	setInterval: () => 1,
 	clearInterval: () => {},
-	fetch: async () => ({
-		ok: true,
-		json: async () => ({
-			exists: true,
-			steps: 5,
-			hasUsage: true,
-			cost: 0.5,
-			currency: "CNY",
-			period: "peak",
-			totals: { input: 1000, cacheRead: 2000, cacheWrite: 0, output: 500, total: 3500 },
-			models: [{ model: "deepseek-v4-flash", input: 1000, cacheRead: 2000, cacheWrite: 0, output: 500, steps: 5, cost: 0.5 }],
-			context: { usedTokens: 964000, contextWindow: 1000000, period: "peak", model: "deepseek-v4-flash", currency: "CNY", cost: 2.892 },
-			balance: { isAvailable: true, currency: "CNY", total: 110, granted: 10, toppedUp: 100, fetchedAt: 123 }
-		})
-	}),
+	// 桌面端模式下带 origin 的绝对 URL 才会成功；同源/相对请求失败。
+	location: DESKTOP_MODE ? { origin: "app://dsh" } : { origin: "http://127.0.0.1:3080" },
+	fetch: async (url) => {
+		fetchedUrls.push(String(url));
+		const absolute = /^https?:\/\//u.test(String(url));
+		if (DESKTOP_MODE && !absolute) {
+			desktopFailures.push(String(url));
+			throw new TypeError("Failed to fetch");
+		}
+		return {
+			ok: true,
+			json: async () => ({
+				exists: true,
+				steps: 5,
+				hasUsage: true,
+				cost: 0.5,
+				currency: "CNY",
+				period: "peak",
+				totals: { input: 1000, cacheRead: 2000, cacheWrite: 0, output: 500, total: 3500 },
+				models: [{ model: "deepseek-flash", input: 1000, cacheRead: 2000, cacheWrite: 0, output: 500, steps: 5, cost: 0.5 }],
+				context: { usedTokens: 964000, contextWindow: 1000000, period: "peak", model: "deepseek-flash", currency: "CNY", cost: 2.892 },
+				balance: { isAvailable: true, currency: "CNY", total: 110, granted: 10, toppedUp: 100, fetchedAt: 123 }
+			})
+		};
+	},
 	__ModuleLoader__: loader
 };
 sandbox.window.__ModuleLoader__ = loader;
@@ -156,7 +172,7 @@ if (!bodyEl) throw new Error("body element not created");
 console.log("body html:", JSON.stringify(bodyEl.innerHTML));
 if (!bodyEl.innerHTML.includes("上下文 ~964k / 1M (96%)")) throw new Error("context occupancy line missing");
 if (!bodyEl.innerHTML.includes("≈¥2.89")) throw new Error("context cost missing");
-if (!bodyEl.innerHTML.includes("[deepseek-v4-flash · 高峰]")) throw new Error("period tag missing");
+if (!bodyEl.innerHTML.includes("[deepseek-flash · 高峰]")) throw new Error("period tag missing");
 if (!bodyEl.innerHTML.includes("余额") || !bodyEl.innerHTML.includes("¥110")) throw new Error("balance line missing");
 if (!bodyEl.innerHTML.includes("充值 ¥100 · 赠送 ¥10")) throw new Error("balance breakdown title missing");
 
@@ -204,4 +220,19 @@ if (box2.attributes.get("data-position") !== "top-right") throw new Error("confi
 disposer();
 if (documentStub.body.children.some((c) => c.dataset.tokenUsageHud === "box" || c.dataset.tokenUsageHud === "pill")) throw new Error("DOM not cleaned on unload");
 
-console.log("DRAG CHECK OK");
+// 8. 平台适配：Web 端走页面同源；桌面端（自定义协议）自动回退到 host 地址
+console.log("fetched urls:", JSON.stringify(fetchedUrls.slice(0, 3)), "...total", fetchedUrls.length);
+if (DESKTOP_MODE) {
+	// 桌面端：必须使用回退的 host 绝对地址（相对/自定义协议路径会失败）
+	const okUrl = fetchedUrls.find((u) => u.startsWith("http://127.0.0.1:3080" + "/api/token-usage/stats"));
+	if (okUrl === undefined) throw new Error("desktop fallback base not used");
+	// 且必须承认过同源失败（自定义协议 origin 也让候选列表包含它）
+	if (!fetchedUrls.some((u) => u.startsWith("app://"))) throw new Error("custom-scheme origin was not attempted first");
+	console.log("desktop fallback url:", okUrl);
+} else {
+	if (!fetchedUrls.some((u) => u.startsWith("http://127.0.0.1:3080/api/token-usage/stats"))) {
+		throw new Error("web same-origin base not used");
+	}
+}
+
+console.log(DESKTOP_MODE ? "DRAG CHECK OK (desktop mode)" : "DRAG CHECK OK");

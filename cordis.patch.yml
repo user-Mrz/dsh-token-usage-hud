@@ -42,6 +42,10 @@
         pollMs: 1500
         position: top-right
         visible: true
+        # 桌面端（Electron/WebView 等自定义协议壳）的 host 地址。留空 = 自动：
+        # 优先页面同源（Web 端），失败时回退 http://127.0.0.1:3080。仅当页面
+        # 来源不是本机 host 且端口非 3080 时才需要显式填写。
+        hostURL: ''
         # 中国法定节假日（北京时间 YYYY-MM-DD）：全天按空闲价计费。
         # 例：["2026-10-01", "2026-10-02", "2026-10-03"]
         offpeakDates: []

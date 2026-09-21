@@ -167,10 +167,10 @@ const req = {
 	socket: { remoteAddress: "127.0.0.1" },
 	headers: { host: "127.0.0.1:3080", "sec-fetch-site": "same-origin" }
 };
-let status = 0, body = null;
+let status = 0, body = null, headers = {};
 const res = {
-	writeHead(code) { status = code; },
-	end(payload) { body = JSON.parse(payload); }
+	writeHead(code, extra) { status = code; headers = extra ?? {}; },
+	end(payload) { body = payload === undefined ? undefined : JSON.parse(payload); }
 };
 await route.handler(req, res);
 console.log("status:", status);
@@ -240,6 +240,34 @@ if (body.exists !== false) throw new Error("unknown session should report exists
 // non-loopback rejected
 await route.handler({ method: "GET", url: "/api/token-usage/stats?session=" + sessionId, socket: { remoteAddress: "10.0.0.5" }, headers: { host: "evil.example" } }, res);
 if (status !== 403) throw new Error("non-loopback should be 403");
+
+// --- 桌面端适配：自定义协议来源 + CORS --------------------------------
+const desktopReq = {
+	method: "GET",
+	url: "/api/token-usage/stats?session=" + encodeURIComponent(sessionId),
+	socket: { remoteAddress: "127.0.0.1" },
+	headers: { host: "127.0.0.1:3080", origin: "app://dsh", "sec-fetch-site": "cross-site" }
+};
+await route.handler(desktopReq, res);
+console.log("desktop origin status:", status, "cors:", headers["access-control-allow-origin"]);
+if (status !== 200) throw new Error("desktop (custom-scheme origin) must be allowed, got " + status);
+if (headers["access-control-allow-origin"] !== "app://dsh") throw new Error("CORS origin not echoed for desktop");
+
+// OPTIONS preflight from a desktop shell -> 204 + CORS
+await route.handler({ ...desktopReq, method: "OPTIONS" }, res);
+console.log("preflight status:", status, "methods:", headers["access-control-allow-methods"]);
+if (status !== 204) throw new Error("preflight must be 204");
+if (headers["access-control-allow-origin"] !== "app://dsh") throw new Error("preflight CORS missing");
+if (!String(headers["access-control-allow-methods"]).includes("GET")) throw new Error("preflight methods missing");
+
+// 浏览器跨站来源仍然被拒（围栏不能被 CORS 放宽）
+await route.handler({ method: "GET", url: "/api/token-usage/stats?session=" + sessionId, socket: { remoteAddress: "127.0.0.1" }, headers: { host: "127.0.0.1:3080", origin: "https://evil.example", "sec-fetch-site": "cross-site" } }, res);
+if (status !== 403) throw new Error("cross-site browser origin must stay 403");
+
+// Web 同源请求（无 Origin，本机直连）也应带 CORS 头且成功
+await route.handler({ method: "GET", url: "/api/token-usage/stats?session=" + sessionId, socket: { remoteAddress: "127.0.0.1" }, headers: { host: "127.0.0.1:3080" } }, res);
+if (status !== 200) throw new Error("plain loopback request must succeed");
+if ("access-control-allow-origin" in headers) throw new Error("no Origin -> no ACAO header expected");
 
 // unload cleanly
 for (const d of unload) d();

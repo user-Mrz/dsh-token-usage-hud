@@ -33,6 +33,27 @@ DSH Web 插件：在界面**顶层**（悬浮、置顶）显示当前对话的 t
   可在插件配置里修改；`cacheWrite` 缺省按 `cacheRead` 计。
 - **估算兜底**：尚无 provider 用量时，显示基于字符数（约 4 字符/token）的
   `≈ 估算` 行，并标注“暂无计费用量”。
+- **Web / 桌面端双适配**：同一套 host + client 代码同时服务浏览器 GUI 与桌面端
+  （Electron / WebView 等外壳），见下文“平台适配”。
+
+## 平台适配（Web 与桌面端）
+
+插件按 DSH 客户端的同一约定解析 host 地址，**无需为桌面端单独打包**：
+
+| 运行环境 | API base 解析 | 说明 |
+| --- | --- | --- |
+| Web（浏览器 GUI） | 页面同源（`location.origin`） | 与 DSH 官方客户端 `resolveBase()` 一致 |
+| 桌面端：WebView 指向本机 host | 页面同源 | 开箱即用 |
+| 桌面端：自定义协议壳（`app://` 等） | 回退 `hostURL` 或 `http://127.0.0.1:3080` | 同源请求失败后自动切换并记住可用 base |
+
+- **host 端 CORS**：桌面壳以自定义协议（`app://`、`file://` → Origin `null`）
+  跨源访问本机 host 时，回环请求会回显 `Access-Control-Allow-Origin` 并支持
+  `OPTIONS` 预检；**非回环请求仍然 403**，浏览器跨站来源（`https://…` +
+  `sec-fetch-site: cross-site`）也仍然被拒——围栏没有被放宽。
+- **客户端平台声明**：`dsh.client.platform: "web"`。DSH 的 client-module 注册表
+  只为 `platform: "web"` 的包提供客户端 bundle，桌面端外壳同样消费这份 bundle，
+  因此桌面端无需第二个平台声明。
+- 若桌面端的 host 端口不是 3080，配置 `hostURL` 指到实际地址即可。
 
 ## 安装
 
@@ -100,6 +121,7 @@ dsh plugin --profile web remove dsh-token-usage-hud
     pollMs: 1500           # 客户端轮询间隔(ms)，>=300
     position: top-right    # top-right | top-center | bottom-right
     visible: true          # 初始是否显示悬浮框
+    hostURL: ''            # 桌面端 host 地址；留空=自动（同源优先，回退 127.0.0.1:3080）
     offpeakDates: []       # 中国法定节假日（北京时间 YYYY-MM-DD）全天按空闲价
     balance:
       enabled: true        # 账户余额显示开关
