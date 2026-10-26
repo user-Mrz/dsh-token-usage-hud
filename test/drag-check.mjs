@@ -17,6 +17,9 @@ const localStorageStub = {
 // 桌面端模式：页面以自定义协议加载（origin = "app://dsh"），同源路径不可用，
 // 只有回退的 host 地址（http://127.0.0.1:3080）能应答。
 const DESKTOP_MODE = process.argv.includes("--desktop");
+// 0.2.x 主视图选择有两种等价来源：ui-session 的 adapter.current（默认路径）
+// 与 list.byId 的 mainView 保留计数（--fallback 覆盖没有 uiSession 的宿主）。
+const FALLBACK_MODE = process.argv.includes("--fallback");
 const fetchedUrls = [];
 const desktopFailures = [];
 
@@ -139,10 +142,22 @@ vm.runInContext(code, sandbox);
 
 const exportsObj = registration.factory(() => { throw new Error("require"); });
 
+// DSH 0.2.x 的客户端会话列表形态：没有 current，主视图由 retainedBy 表达。
 const sessions = {
 	list: {
-		getSnapshot: () => ({ current: "sess-1" }),
+		getSnapshot: () => ({
+			ids: ["sess-1"],
+			byId: { "sess-1": { id: "sess-1", retainedBy: { mainView: FALLBACK_MODE ? 1 : 0 } } },
+			phase: "ready"
+		}),
 		subscribe: () => () => {}
+	}
+};
+const uiSession = {
+	adapter: {
+		current: {
+			getSnapshot: () => ({ key: "sess-1" })
+		}
 	}
 };
 let disposer = null;
@@ -152,7 +167,9 @@ const fakeCtx = {
 		return disposer;
 	},
 	get(name) {
-		return name === "sessions" ? sessions : undefined;
+		if (name === "sessions") return sessions;
+		if (name === "uiSession") return FALLBACK_MODE ? undefined : uiSession;
+		return undefined;
 	}
 };
 
@@ -222,6 +239,7 @@ if (documentStub.body.children.some((c) => c.dataset.tokenUsageHud === "box" || 
 
 // 8. 平台适配：Web 端走页面同源；桌面端（自定义协议）自动回退到 host 地址
 console.log("fetched urls:", JSON.stringify(fetchedUrls.slice(0, 3)), "...total", fetchedUrls.length);
+if (!fetchedUrls.some((u) => u.includes("session=sess-1"))) throw new Error("main-view session id not sent to the API");
 if (DESKTOP_MODE) {
 	// 桌面端：必须使用回退的 host 绝对地址（相对/自定义协议路径会失败）
 	const okUrl = fetchedUrls.find((u) => u.startsWith("http://127.0.0.1:3080" + "/api/token-usage/stats"));
@@ -235,4 +253,10 @@ if (DESKTOP_MODE) {
 	}
 }
 
-console.log(DESKTOP_MODE ? "DRAG CHECK OK (desktop mode)" : "DRAG CHECK OK");
+console.log(
+	DESKTOP_MODE
+		? "DRAG CHECK OK (desktop mode)"
+		: FALLBACK_MODE
+			? "DRAG CHECK OK (mainView fallback)"
+			: "DRAG CHECK OK"
+);

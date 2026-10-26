@@ -1,7 +1,7 @@
 # dsh-token-usage-hud
 
-DSH Web 插件：在界面**顶层**（悬浮、置顶）显示当前对话的 token 消耗、费用消耗与
-账户剩余金额。
+DSH（DeepSeek Harness）**0.2.x** 插件：在界面**顶层**（悬浮、置顶）显示当前对话的
+token 消耗、费用消耗与账户剩余金额。
 
 ```
 ⚡ 本对话用量          ×
@@ -14,8 +14,9 @@ DSH Web 插件：在界面**顶层**（悬浮、置顶）显示当前对话的 t
 
 ## 功能
 
-- **host 端**：订阅 `session/event`，对持久会话日志做增量折叠（provider 上报的
-  `assistant/message` usage，按 `request/header` 记录的模型归账），并暴露
+- **host 端**：订阅 `session/event`，通过 0.2.x 的 `Session.snapshotEvents()`
+  增量读取持久会话日志（不再使用已移除的 `session.events`），对 provider 上报的
+  `assistant/message` usage 按 `request/header` 记录的模型归账，并暴露
   loopback-only 的 JSON 接口 `/api/token-usage/stats?session=<id>`。
 - **账户余额**：通过 credentials 服务解析 DeepSeek API Key（默认
   `DEEPSEEK_API_KEY`，与 llm 适配器同源），调用官方 `GET /user/balance` 实时
@@ -24,10 +25,11 @@ DSH Web 插件：在界面**顶层**（悬浮、置顶）显示当前对话的 t
 - **上下文占用行**：读取与对话框（composer）下方同一数据源的
   `contextPressure` 投影（`~已用 / 上下文窗口` 及占用百分比），并按当前模型的
   输入单价 × 当前时段给出**下一次请求的上下文费用估算**（`≈¥X`）。
-- **client 端**：跟随当前选中会话，轮询该接口，在页面顶层渲染悬浮框；**标题栏
-  可拖拽移动**（鼠标/触摸，位置自动记忆——刷新、收起再展开后仍停留在原处），
-  **双击标题栏复位**到配置位置；`×` 可收起为小药丸（localStorage 记忆），刷新
-  页面可恢复。
+- **client 端**：跟随主视图当前会话（0.2.x 通过 `uiSession.adapter.current`
+  解析，回退到列表的 `retainedBy.mainView` 计数；兼容旧版 `list.current`），
+  轮询该接口，在页面顶层渲染悬浮框；**标题栏可拖拽移动**（鼠标/触摸，位置自动
+  记忆——刷新、收起再展开后仍停留在原处），**双击标题栏复位**到配置位置；`×`
+  可收起为小药丸（localStorage 记忆），刷新页面可恢复。
 - **费用估算**：按 token 桶 × 单价计算，单价表默认使用 **DeepSeek 官方 V4 定价**
   （¥/百万 tokens，区分高峰/空闲两档，历史步骤按其发生时段精确计价，见下文）；
   可在插件配置里修改；`cacheWrite` 缺省按 `cacheRead` 计。
@@ -35,6 +37,21 @@ DSH Web 插件：在界面**顶层**（悬浮、置顶）显示当前对话的 t
   `≈ 估算` 行，并标注“暂无计费用量”。
 - **Web / 桌面端双适配**：同一套 host + client 代码同时服务浏览器 GUI 与桌面端
   （Electron / WebView 等外壳），见下文“平台适配”。
+
+## 兼容版本（DSH 0.2.x）
+
+本版本（0.6.0）适配 **DSH 0.2.x**，`package.json` 的 `dsh.engines.dsh`
+为 `>=0.2.0-rc.2`：
+
+- 已验证 **0.2.0-rc.2**（当前 Desktop 运行时）与 **0.2.1-rc.3**（最新发布）。
+- 截至 2026-10-26：npm `@deepseek-ai/dsh` 的 `latest` 为 **0.2.1-rc.2**
+  （2026-10-17），`next` 为 **0.2.1-rc.3**（2026-10-22）。
+- 0.2.x 接口变化：host 端 `Session.events` → `Session.snapshotEvents()`；
+  client 端 `SessionListState.current` → 主视图 `retainedBy.mainView` /
+  `uiSession.adapter.current`。插件对旧字段保留了回退读取。
+
+版本来源：[DSH 版本发布](https://dsh-ai.com/versions/) ·
+[npm @deepseek-ai/dsh](https://www.npmjs.com/package/@deepseek-ai/dsh)
 
 ## 平台适配（Web 与桌面端）
 
@@ -53,11 +70,15 @@ DSH Web 插件：在界面**顶层**（悬浮、置顶）显示当前对话的 t
 - **客户端平台声明**：`dsh.client.platform: "web"`。DSH 的 client-module 注册表
   只为 `platform: "web"` 的包提供客户端 bundle，桌面端外壳同样消费这份 bundle，
   因此桌面端无需第二个平台声明。
+- **主视图会话**：0.2.x 的“当前会话”由主视图的保留关系表达。插件优先读取
+  `uiSession.adapter.current` 的 `key`，不可用时回退到
+  `list.byId[*].retainedBy.mainView`，并兼容旧版的 `list.current`。
 - 若桌面端的 host 端口不是 3080，配置 `hostURL` 指到实际地址即可。
 
 ## 安装
 
-**要求**：DSH ≥ 0.1.1-rc.1（`package.json` 的 `dsh.engines` 已声明）。
+**要求**：DSH ≥ 0.2.0-rc.2（`package.json` 的 `dsh.engines` 已声明；已验证
+0.2.0-rc.2 与 0.2.1-rc.3）。
 
 ### 方式一：`dsh plugin`（推荐，自动加入 bundles 列表）
 
@@ -88,13 +109,15 @@ dsh plugin --profile web add "C:\path\to\dsh-token-usage-hud"
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-web-app",
-        "@linxin666/dsh-web-ui-all",
         "dsh-token-usage-hud"
       ]
     }
   }
 }
 ```
+
+`@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-web-app` 是 0.2.x 的 Web 默认组合；
+若你还装有其他第三方 bundle，按原有顺序追加即可（本插件放在最后）。
 
 然后在 profile 目录 `pnpm install`（或把包目录放入
 `%USERPROFILE%\.dsh\profiles\web\node_modules\`，hoisted 布局，junction 亦可）。
@@ -175,11 +198,13 @@ dsh plugin --profile web remove dsh-token-usage-hud
 - 费用为**估算值**：单价表需与你的实际计费口径一致（可在配置中调整）；模型
   切换会按各自单价分桶计费，历史步骤按其发生时段（高峰/空闲）精确计价。
 - token 数为 provider 上报的真实用量（输入/缓存读/缓存写/输出），与
-  dsh-token-meter 的 `tokenUsage` 口径一致；`reasoningTokens` 是输出子项，不
-  重复累加。
+  dsh-token-meter 的 `tokenUsage` 投影口径一致（0.2.x 把输入桶命名为
+  `uncachedInputTokens`，原始事件仍为 `inputTokens`，插件两者都接受）；
+  `reasoningTokens` 是输出子项，不重复累加。
 - 接口仅允许本机回环访问（与 dsh-perf 相同的防护）。
 - **隐私**：插件不读写任何 API Key / 凭据 / 设置文件；浏览器端仅向本机
   loopback 接口发送当前会话 id；localStorage 只存显隐与拖拽坐标两个 UI 键。
-- **移植性**：插件只用 DSH 标准服务（`sessions` / `webServer` /
-  可选的 `sessionProjections`），任何标准 web profile 均可安装；“上下文占用”
-  一行依赖 token-meter 注册的 `contextPressure` 投影（dsh-base 默认包含）。
+- **移植性**：插件只用 DSH 标准服务（host：`sessions` / `webServer` / 可选的
+  `sessionProjections`；client：`sessions` / 可选的 `uiSession`），任何标准
+  web profile 均可安装；“上下文占用”一行依赖 token-meter 注册的
+  `contextPressure` 投影（dsh-base 默认包含）。

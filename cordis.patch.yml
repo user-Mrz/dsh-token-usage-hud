@@ -1,5 +1,10 @@
 # dsh-token-usage-hud bundle patch.
 #
+# Targets DSH 0.2.x (>= 0.2.0-rc.2): the host folds the durable log through
+# Session.snapshotEvents() (the pre-0.2 `events` getter is kept as a fallback),
+# and the client follows the main-view session through uiSession /
+# retainedBy.mainView.
+#
 # Inserts the plugin row into the profile loader. The row id must stay unique
 # across every bundle layer; the name must be the package name (the loader and
 # the client-module scanner resolve the package by this name).

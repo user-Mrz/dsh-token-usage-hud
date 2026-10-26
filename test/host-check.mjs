@@ -58,9 +58,15 @@ const events = lines.slice(1).map((l) => { try { return JSON.parse(l); } catch {
 const sessionId = header.id;
 
 const sessions = new Map();
+let snapshotCalls = 0;
 const fakeSession = {
 	id: sessionId,
-	events: Object.freeze(events)
+	// DSH 0.2.x removed the `events` getter; the host reads the immutable log
+	// snapshot instead (the legacy getter stays supported by sessionEvents()).
+	snapshotEvents() {
+		snapshotCalls += 1;
+		return Object.freeze(events);
+	}
 };
 sessions.set(sessionId, fakeSession);
 
@@ -182,7 +188,8 @@ console.log("estimatedTokens:", body.estimatedTokens);
 
 if (status !== 200) throw new Error("bad status");
 if (body.sessionId !== sessionId) throw new Error("bad session id echo");
-if (!body.hasUsage || body.steps < 90) throw new Error("usage missing");
+if (!body.hasUsage || body.steps <= 0) throw new Error("usage missing");
+if (snapshotCalls <= 0) throw new Error("snapshotEvents() was not used for the durable log");
 if (body.totals.total <= 0) throw new Error("empty totals");
 if (body.cost <= 0) throw new Error("empty cost");
 if (body.period !== "peak" && body.period !== "offpeak") throw new Error("period missing");

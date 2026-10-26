@@ -3,7 +3,7 @@
 // pricing. Not shipped.
 import { readFileSync } from "node:fs";
 import { zstdDecompressSync } from "node:zlib";
-import { createFold, syncFold, finalizeFold, estimateSessionTokens, isPeakHour, beijingDateKey } from "../lib/index.js";
+import { createFold, syncFold, finalizeFold, estimateSessionTokens, isPeakHour, beijingDateKey, sessionEvents, foldEvent } from "../lib/index.js";
 
 const ZSTD_MAGIC = 4247762216;
 function scanZstdFrames(buffer) {
@@ -76,6 +76,17 @@ for (const [iso, expected, list, label] of holidayCases) {
 	if (got !== expected) throw new Error(`isPeakHour(holiday) ${label}: expected ${expected}, got ${got}`);
 	console.log(`isPeakHour ok: ${label}`);
 }
+
+// --- DSH 0.2.x surface: snapshotEvents() / legacy events getter ------------
+const one = [{ type: "user/message", data: { content: [{ type: "text", text: "hi" }] } }];
+if (sessionEvents({ snapshotEvents: () => one }).length !== 1) throw new Error("snapshotEvents path failed");
+if (sessionEvents({ events: one }).length !== 1) throw new Error("legacy events fallback failed");
+if (sessionEvents({}).length !== 0) throw new Error("absent log should read empty");
+// 投影口径的 uncachedInputTokens 也应被接受（原始事件通常写 inputTokens）
+const projected = createFold();
+foldEvent(projected, { type: "assistant/message", time: Date.parse("2026-03-09T02:00:00Z"), data: { usage: { uncachedInputTokens: 10, outputTokens: 5 } } });
+if (projected.byModel.get("unknown")?.input !== 10 || projected.byModel.get("unknown")?.output !== 5) throw new Error("uncachedInputTokens fallback failed");
+console.log("0.2.x session log surface ok");
 
 // --- fold over the real session log ----------------------------------------
 const file = process.argv[2];
